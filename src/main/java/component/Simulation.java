@@ -7,6 +7,8 @@ import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -23,44 +25,51 @@ import org.springframework.web.multipart.MultipartFile;
 
 public class Simulation {
 
-	public void writeFiles(MultipartFile[] files, String root, String macro) {
+	public byte[] writeFiles(MultipartFile[] files, String root, String macro) {
+		byte[] output = null;
 		try {
 			File projectDir = new File(root);
-			projectDir.mkdir();
-			Arrays.asList(files).stream().forEach(file -> {
-				System.out.println(file.getOriginalFilename());
-				byte[] bytes;
-				try {
-					File fileObj;
-					bytes = file.getBytes();
-					String s = new String(bytes, StandardCharsets.UTF_8);
-					if (file.getOriginalFilename().contains(".ma")) {
-						fileObj = new File(root + "/model.ma");
-					} else if (file.getOriginalFilename().contains(".pal")) {
-						fileObj = new File(root + "/style.pal");
-					} else if (file.getOriginalFilename().contains(".inc")) {
-						fileObj = new File(root + "/" + macro);
+			if(projectDir.mkdir()==true) {
+				Arrays.asList(files).stream().forEach(file -> {
+					System.out.println(file.getOriginalFilename());
+					byte[] bytes;
+					try {
+						File fileObj;
+						bytes = file.getBytes();
+						String s = new String(bytes, StandardCharsets.UTF_8);
+						if (file.getOriginalFilename().contains(".ma")) {
+							fileObj = new File(root + "/model.ma");
+						} else if (file.getOriginalFilename().contains(".pal")) {
+							fileObj = new File(root + "/style.pal");
+						} else if (file.getOriginalFilename().contains(".inc")) {
+							fileObj = new File(root + "/" + macro);
+						}
+						else if(file.getOriginalFilename().contains(".stvalues")) {
+							fileObj = new File(root + "/" + file.getOriginalFilename());
+						}
+						else {
+							fileObj = new File(root + "/initial.val");
+						}
+						
+						fileObj.createNewFile();
+						FileWriter writer = new FileWriter(root + "/" + fileObj.getName());
+						writer.write(s);
+						writer.close();
+					} catch (IOException e) {
+						e.printStackTrace();
 					}
-					else if(file.getOriginalFilename().contains(".stvalues")) {
-						fileObj = new File(root + "/" + file.getOriginalFilename());
-					}
-					else {
-						fileObj = new File(root + "/initial.val");
-					}
-					
-					fileObj.createNewFile();
-					FileWriter writer = new FileWriter(root + "/" + fileObj.getName());
-					writer.write(s);
-					writer.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
 
-			});
-
+				});
+			}
+			else {
+				output = "Cannot create project folder".getBytes();
+			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			StringWriter errors = new StringWriter();
+			e.printStackTrace(new PrintWriter(errors));
+			output = ("Error while running simulation " + errors.toString()).getBytes();
 		}
+		return output;
 	}
 
 	public ResponseEntity<byte[]> runLinux(String root, String projectID, String simTime, boolean debug)
@@ -68,7 +77,7 @@ public class Simulation {
 		String filePath = root + "/cd++";
 		String projectDir = root + "/" + projectID;
 		File dir = new File(projectDir);
-		byte[] output = null;
+		byte[] output = Arrays.toString(dir.list()).getBytes();
 		ContentDisposition disposition = ContentDisposition.attachment().filename("response.zip").build();
 
 		HttpHeaders httpHeaders = new HttpHeaders();
@@ -77,13 +86,12 @@ public class Simulation {
 		if (new File(filePath).exists()) {
 			try {
 				List<String> command = new ArrayList<String>(
-						Arrays.asList(filePath, "-mmodel.ma", "-lmessages.log", "-t00:" + simTime + ":000"));
+						Arrays.asList(filePath, "-mmodel.ma", "-lmessages.log", "-t" + simTime + ":000"));
 				if (debug) {
 					command.add("-pparse.log");
 					command.add("-vdebug.log");
 				}
 				ProcessBuilder pb = new ProcessBuilder(command).redirectErrorStream(true);
-				;
 				pb.directory(dir);
 				pb.redirectError();
 				Process p = pb.start();
@@ -141,10 +149,12 @@ public class Simulation {
 					return ResponseEntity.badRequest().headers(httpHeaders).body(zf.toByteArray());
 				}
 			} catch (Exception e) {
-				output = ("Error while running simulation " + e.getMessage()).getBytes();
+				StringWriter errors = new StringWriter();
+				e.printStackTrace(new PrintWriter(errors));
+				output = ("Error while running simulation " + errors.toString()).getBytes();
 			}
 		} else {
-			System.err.println(filePath + " does not exist");
+			output = (filePath + " does not exist").getBytes();
 		}
 		return ResponseEntity.badRequest().headers(httpHeaders).body(output);
 	}
@@ -163,13 +173,12 @@ public class Simulation {
 		if (new File(filePath).exists()) {
 			try {
 				List<String> command = new ArrayList<String>(
-						Arrays.asList("wine", filePath, "-mmodel.ma", "-lmessages.log", "-t00:" + simTime + ":000"));
+						Arrays.asList("wine", filePath, "-mmodel.ma", "-lmessages.log", "-t" + simTime + ":000"));
 				if (debug) {
 					command.add("-pparse.log");
 					command.add("-vdebug.log");
 				}
 				ProcessBuilder pb = new ProcessBuilder().redirectErrorStream(true);
-				;
 				System.out.println(command.toString());
 				pb.command(command);
 				pb.directory(dir);

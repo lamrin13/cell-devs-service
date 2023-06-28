@@ -55,9 +55,6 @@ public class WebController {
 
 		ResponseEntity<byte[]> output = simulator.equals("santi") ? simulation.runLinux(root, projectID, simTime, debug)
 				: simulation.runWindows(root, projectID, simTime, debug);
-		if (output.toString().contains("Error") || output.toString().contains("exited")) {
-
-		}
 		return output;
 	}
 
